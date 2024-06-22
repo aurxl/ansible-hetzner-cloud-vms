@@ -1,0 +1,42 @@
+---
+- hosts: hetzner_cloud_vm
+  gather_facts: True
+  tasks:
+    - ansible.builtin.set_fact:
+        api_token: "{{ projects[hetzner.project]['hetzner_api_token'] }}"
+      when: item == hetzner.project
+      loop: "{{ projects.keys() | list }}"
+
+    - name: delete vm "{{ hostname }}"
+      delegate_to: 127.0.0.1
+      hcloud_server:
+        name: "{{ hostname }}"
+        api_token: "{{ api_token }}"
+        server_type: "{{ hetzner.server_type }}"
+        image: "{{ hetzner.image }}"
+        state: absent
+
+    - name: delete dns record (ipv4)
+      delegate_to: 127.0.0.1
+      community.dns.hetzner_dns_record:
+        state: absent
+        type: A
+        zone: "{{ hetzner.zone }}"
+        value: "{{ ansible_default_ipv4.address }}"
+        record: "{{ inventory_hostname }}"
+        ttl: "{{ hetzner.ttl  }}"
+        hetzner_token: "{{ hetzner_dns_api }}"
+      when: hetzner.ipv4 is defined and hetzner.ipv4
+
+    - name: delete dns record (ipv6)
+      delegate_to: 127.0.0.1
+      community.dns.hetzner_dns_record:
+        state: absent
+        type: AAAA
+        zone: "{{ hetzner.zone }}"
+        value: "{{ ansible_default_ipv6.address }}"
+        record: "{{ inventory_hostname }}"
+        ttl: "{{ hetzner.ttl  }}"
+        hetzner_token: "{{ hetzner_dns_api }}"
+      when: hetzner.ipv6 is defined and hetzner.ipv6
+

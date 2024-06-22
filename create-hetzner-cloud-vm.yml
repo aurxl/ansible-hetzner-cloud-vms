@@ -1,0 +1,66 @@
+---
+- hosts: hetzner_cloud_vm
+  connection: local
+  gather_facts: False
+  vars:
+    key_names: "{{ hetzner.key_names }}"
+  tasks:
+    - ansible.builtin.set_fact:
+        api_token: "{{ projects[hetzner.project]['hetzner_api_token'] }}"
+      when: item == hetzner.project
+      loop: "{{ projects.keys() | list }}"
+
+    - name: spawn vm
+      hcloud_server:
+        name: "{{ hostname }}"
+        api_token: "{{ api_token }}"
+        server_type: "{{ hetzner.server_type }}"
+        image: "{{ hetzner.image }}"
+        location: "{{ hetzner.location | default('fsn1') }}"
+        ssh_keys: "{{ key_names }}"
+        enable_ipv4: "{{ hetzner.ipv4 | default(False) }}"
+        enable_ipv6: "{{ hetzner.ipv6 | default(True) }}"
+        state: present
+      register: vm_infos
+
+    - name: debug
+      debug:
+        var: vm_infos
+
+    - name: create dns record for ipv4
+      community.dns.hetzner_dns_record:
+        state: present
+        type: A
+        zone: "{{ hetzner.zone }}"
+        value: "{{ vm_infos.hcloud_server.ipv4_address }}"
+        record: "{{ inventory_hostname }}"
+        ttl: "{{ hetzner.ttl  }}"
+        hetzner_token: "{{ hetzner_dns_api }}"
+      when: vm_infos.hcloud_server.ipv4_address and hetzner.ipv4 is defined and hetzner.ipv4
+
+    - name: create dns record for ipv6
+      block:
+        - name: prepare ipv6 address
+          ansible.builtin.set_fact:
+            ipv6_address: "{{ vm_infos.hcloud_server.ipv6 | ansible.utils.ipaddr('network') }}"
+
+        - name: add ::1 to address
+          ansible.builtin.set_fact:
+            ipv6_address: "{{ ipv6_address + '1' }}"
+          when: "ipv6_address[-2:]  == '::'"
+
+        - name: debug
+          ansible.builtin.debug:
+            msg: "{{ ipv6_address}}"
+
+        - name: create dns record
+          community.dns.hetzner_dns_record:
+            state: present
+            type: AAAA
+            zone: "{{ hetzner.zone }}"
+            value: "{{ ipv6_address }}"
+            record: "{{ inventory_hostname }}"
+            ttl: "{{ hetzner.ttl  }}"
+            hetzner_token: "{{ hetzner_dns_api }}"
+      when: vm_infos.hcloud_server.ipv6 and hetzner.ipv6 is defined and hetzner.ipv6
+
