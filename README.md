@@ -25,10 +25,11 @@ projects:
       $ANSIBLE_VAULT;1.1;AES256
       1234...
 
-  overflow-maschine:
+  other_project:
     hetzner_api_token: !vault |
       $ANSIBLE_VAULT;1.1;AES256
       1234..
+
 hetzner_dns_api: !vault |
   $ANSIBLE_VAULT;1.1;AES256
   1234...
